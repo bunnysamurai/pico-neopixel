@@ -11,7 +11,10 @@ project(serial-neopixel)
 
 pico_sdk_init()
 
-add_executable(${PROJECT_NAME} app/firmware.cpp)
+add_executable(${PROJECT_NAME} 
+    app/firmware.cpp
+    app/led_driver.cpp
+)
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     pico_stdlib 
