@@ -1,5 +1,9 @@
 #include "hardware/pio.h"
+#include "hardware/pwm.h"
+#include "hardware/clocks.h"
 #include "pico/time.h"
+#include "pico/stdlib.h"
+#include <cstdio>
 #include "ws2812/ws2812.hpp"
 #include <array>
 #include <bit>
@@ -46,7 +50,7 @@ inline constexpr double sine_power_series(double radian, size_t terms)
     {
         const double numer{integral_pow(radian, 2 * n + 1)};
         const double denom{static_cast<double>(factorial(2 * n + 1))};
-        const double factor{(n & 0x1U) == 0 ? 1.0 : -1.0};
+        const double factor{integral_pow(-1.0, n)};
         rv += (numer / denom) * factor;
     }
     return rv;
@@ -61,36 +65,80 @@ template <size_t N>
 static constexpr auto SINE_TABLE{
     []()
     {
-        constexpr auto POWER_SERIES_TERMS{5};
+        constexpr auto POWER_SERIES_TERMS{11};
         // https://math.stackexchange.com/questions/2853310/how-to-calculate-the-sine-manually-without-any-rules-calculator-or-anything-el#2853320
         // using the power-series method
         std::array<uint8_t, N> rv{};
         for (size_t ii = 0; ii < std::size(rv); ++ii)
         {
-            const double radian{static_cast<double>((2 * 3.141592653589793) / std::size(rv) * ii)};
-            const auto value{sine_power_series(radian, POWER_SERIES_TERMS)};
-            rv[ii] = static_cast<uint8_t>((value + 1) / 2) + std::numeric_limits<uint8_t>::max();
+            const double radian{static_cast<double>(ii) / std::size(rv) * 2 * 3.141592653589793};
+            const double value{(sine_power_series(radian, POWER_SERIES_TERMS) + 1.0) / 2.0};
+            rv[ii] = static_cast<uint16_t>(value * std::numeric_limits<uint8_t>::max()) & 0xFFU;
         }
         return rv;
     }()};
 
-inline constexpr auto SINE_TABLE_MASK(const auto &sine_table) { return static_cast<uint8_t>(~(std::size(sine_table) - 1)); }
+inline constexpr auto SINE_TABLE_MASK(const auto &sine_table) { return std::size(sine_table) - 1; }
+
+class LED_Driver
+{
+public:
+    LED_Driver(int pin_number) : m_pin{pin_number}, m_wrap{0xFFFFU}
+    {
+        gpio_set_function(m_pin, GPIO_FUNC_PWM);
+
+        pwm_config cfg{pwm_get_default_config()};
+        pwm_config_set_wrap(&cfg, m_wrap);
+
+        const auto slice{pwm_gpio_to_slice_num(m_pin)};
+        const auto channel{pwm_gpio_to_channel(m_pin)};
+        pwm_set_chan_level(slice, channel, 0);
+        pwm_init(slice, &cfg, true);
+    }
+    void put_pixel(uint32_t value)
+    {
+        const auto slice{pwm_gpio_to_slice_num(m_pin)};
+        const auto channel{pwm_gpio_to_channel(m_pin)};
+        pwm_set_chan_level(slice, channel, to_pwm_level(value & 0xFFU));
+    }
+    void set_rgb_mode()
+    { /* do nothing*/
+    }
+    void set_wrgb_mode()
+    { /* do nothing*/
+    }
+
+private:
+    int m_pin;
+    uint16_t m_wrap;
+
+    [[nodiscard]] constexpr uint16_t to_pwm_level(uint8_t level)
+    {
+        return level * m_wrap / std::numeric_limits<uint8_t>::max();
+    }
+};
 
 int main()
 {
+    LED_Driver led_driver(PICO_DEFAULT_LED_PIN);
+
     pico_ws2812::PIO_NeoPixel_Driver driver(PIO_INDEX, PIO_STATE_MACHINE, NEOPIXEL_PIN);
     pico_ws2812::WRGB_Driver pixel_driver{driver};
     pico_ws2812::WRGB_Pattern_Driver pattern_driver{pixel_driver, NEOPIXEL_LED_COUNT};
 
-    auto pattern_generator{[index = uint{0}](uint) mutable
+    static uint index{0};
+    auto pattern_generator{[](uint)
                            {
-                               const auto pixel_value{SINE_TABLE<1024>[index++ & SINE_TABLE_MASK(SINE_TABLE<1024>)]};
+                               const auto pixel_value{SINE_TABLE<128>[index & SINE_TABLE_MASK(SINE_TABLE<128>)]};
                                return pico_ws2812::WRGB{.white{pixel_value}, .red{0}, .green{0}, .blue{0}};
                            }};
 
     for (;;)
     {
         pattern_driver.put_pattern(pattern_generator);
-        sleep_ms(5);
+        auto pixel_value{SINE_TABLE<128>[index & SINE_TABLE_MASK(SINE_TABLE<128>)]};
+        led_driver.put_pixel(pixel_value);
+        index++;
+        sleep_ms(50);
     }
 }
