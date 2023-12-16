@@ -126,16 +126,19 @@ int main()
     pico_ws2812::WRGB_Driver pixel_driver{driver};
     pico_ws2812::WRGB_Pattern_Driver pattern_driver{pixel_driver, NEOPIXEL_LED_COUNT};
 
-    static uint index{0};
-    auto pattern_generator{[](uint)
+    auto pattern_generator{[](uint index)
                            {
-                               const auto pixel_value{SINE_TABLE<128>[index & SINE_TABLE_MASK(SINE_TABLE<128>)]};
-                               return pico_ws2812::WRGB{.white{pixel_value}, .red{0}, .green{0}, .blue{0}};
+                               return [=](uint)
+                               {
+                                   const auto pixel_value{SINE_TABLE<128>[index & SINE_TABLE_MASK(SINE_TABLE<128>)]};
+                                   return pico_ws2812::WRGB{.white{pixel_value}, .red{0}, .green{0}, .blue{0}};
+                               };
                            }};
 
+    uint index{0};
     for (;;)
     {
-        pattern_driver.put_pattern(pattern_generator);
+        pattern_driver.put_pattern(pattern_generator(index));
         auto pixel_value{SINE_TABLE<128>[index & SINE_TABLE_MASK(SINE_TABLE<128>)]};
         led_driver.put_pixel(pixel_value);
         index++;
