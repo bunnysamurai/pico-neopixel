@@ -15,16 +15,16 @@
 #define ws2812_wrap_target 0
 #define ws2812_wrap 3
 
-#define ws2812_T1 2
-#define ws2812_T2 5
-#define ws2812_T3 3
+#define ws2812_T1 1
+#define ws2812_T2 1
+#define ws2812_T3 2
 
 static const uint16_t ws2812_program_instructions[] = {
             //     .wrap_target
-    0x6221, //  0: out    x, 1            side 0 [2] 
-    0x1123, //  1: jmp    !x, 3           side 1 [1] 
-    0x1400, //  2: jmp    0               side 1 [4] 
-    0xa442, //  3: nop                    side 0 [4] 
+    0x6121, //  0: out    x, 1            side 0 [1] 
+    0x1023, //  1: jmp    !x, 3           side 1     
+    0x1000, //  2: jmp    0               side 1     
+    0xa042, //  3: nop                    side 0     
             //     .wrap
 };
 

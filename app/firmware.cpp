@@ -18,6 +18,8 @@ static constexpr auto NEOPIXEL_LED_COUNT{24};
 static const PIO PIO_INDEX{pio0};
 static constexpr auto PIO_STATE_MACHINE{0};
 
+static constexpr auto SINE_TABLE_LENGTH{ 1024 };
+
 int main()
 {
     LED_Driver led_driver(PICO_DEFAULT_LED_PIN);
@@ -30,18 +32,18 @@ int main()
                            {
                                return [=](uint)
                                {
-                                   const auto pixel_value{SINE_TABLE<128>[index & SINE_TABLE_MASK(SINE_TABLE<128>)]};
+                                   const auto pixel_value{SINE_TABLE<SINE_TABLE_LENGTH>[index & SINE_TABLE_MASK(SINE_TABLE<SINE_TABLE_LENGTH>)]};
                                    return pico_ws2812::WRGB{.white{pixel_value}, .red{0}, .green{0}, .blue{0}};
                                };
                            }};
 
-    uint index{0};
+    uint index{SINE_TABLE_LENGTH/2};
     for (;;)
     {
         pattern_driver.put_pattern(pattern_generator(index));
-        auto pixel_value{SINE_TABLE<128>[index & SINE_TABLE_MASK(SINE_TABLE<128>)]};
+        auto pixel_value{SINE_TABLE<SINE_TABLE_LENGTH>[index & SINE_TABLE_MASK(SINE_TABLE<SINE_TABLE_LENGTH>)]};
         led_driver.put_pixel(pixel_value);
         index++;
-        sleep_ms(50);
+        sleep_ms(5);
     }
 }

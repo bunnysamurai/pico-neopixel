@@ -7,9 +7,16 @@
 .program ws2812
 .side_set 1
 
-.define public T1 2
-.define public T2 5
-.define public T3 3
+; ws2812
+; .define public T1 2
+; .define public T2 5
+; .define public T3 3
+
+; SK6812RGBW (adafruit WRGB neopixel rings)
+;   https://cdn-shop.adafruit.com/product-files/2757/p2757_SK6812RGBW_REV01.pdf 
+ .define public T1 1
+ .define public T2 1
+ .define public T3 2
 
 .lang_opt python sideset_init = pico.PIO.OUT_HIGH
 .lang_opt python out_init     = pico.PIO.OUT_HIGH

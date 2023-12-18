@@ -62,7 +62,7 @@ namespace pico_ws2812
         void set_wrgb_mode() noexcept
         {
             uint offset = pio_add_program(m_pio, &ws2812_program);
-            ws2812_program_init(m_pio, m_state_machine, offset, m_pin, 800000, false);
+            ws2812_program_init(m_pio, m_state_machine, offset, m_pin, 800000, true);
         }
 
         void put_pixel(uint32_t pixel_value) noexcept
