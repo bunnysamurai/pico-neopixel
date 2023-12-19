@@ -19,6 +19,7 @@ static const PIO PIO_INDEX{pio0};
 static constexpr auto PIO_STATE_MACHINE{0};
 
 static constexpr auto SINE_TABLE_LENGTH{1024};
+static constexpr auto GAMMA_CURVE_LENGTH{256};
 
 int main()
 {
@@ -34,7 +35,9 @@ int main()
                                {
                                    const auto sine_index{index + pixel_index * SINE_TABLE_LENGTH / NEOPIXEL_LED_COUNT};
                                    const auto pixel_value{SINE_TABLE<SINE_TABLE_LENGTH>[sine_index & SINE_TABLE_MASK(SINE_TABLE<SINE_TABLE_LENGTH>)]};
-                                   return pico_ws2812::WRGB{.white{pixel_value}, .red{0}, .green{0}, .blue{0}};
+                                   const auto gamma_pixel_value{GAMMA_CURVE<GAMMA_CURVE_LENGTH>[pixel_value]};
+                                   // full 255 is too bright, let's scale down by a factor of 8 
+                                   return pico_ws2812::WRGB{.white{static_cast<uint8_t>(gamma_pixel_value >> 4)}, .red{0}, .green{0}, .blue{0}};
                                };
                            }};
 
@@ -42,8 +45,8 @@ int main()
     for (;;)
     {
         pattern_driver.put_pattern(pattern_generator(index));
-        auto pixel_value{SINE_TABLE<SINE_TABLE_LENGTH>[index & SINE_TABLE_MASK(SINE_TABLE<SINE_TABLE_LENGTH>)]};
-        led_driver.put_pixel(pixel_value);
+        const auto pixel_value{SINE_TABLE<SINE_TABLE_LENGTH>[index & SINE_TABLE_MASK(SINE_TABLE<SINE_TABLE_LENGTH>)]};
+        led_driver.put_pixel(GAMMA_CURVE<GAMMA_CURVE_LENGTH>[pixel_value]);
         index++;
         sleep_ms(5);
     }
