@@ -103,7 +103,7 @@ inline constexpr auto SINE_TABLE_MASK(const auto &sine_table) { return std::size
 
 template <size_t N>
     requires(std::popcount(N) == 1)
-inline constexpr auto GAMMA_CURVE{
+inline constexpr auto SRGB_GAMMA_CURVE{
     // An sRGB gamma correction
     []()
     {
