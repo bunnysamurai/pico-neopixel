@@ -1,20 +1,20 @@
 
 #include "app/Command.hpp"
 
-#include <iostream>
+#include "pico/printf.h"
 
 namespace
 {
     void print_usage()
     {
-        std::cout << "Welcome to the Meven Light 5000.\n";
-        std::cout << "We'll keep the light on for ya.\n";
-        std::cout << "Available commands:\n";
+        printf("Welcome to the Meven Light 5000.\n");
+        printf("We'll keep the light on for ya.\n");
+        printf("Available commands:\n");
         for (const auto &key : BASECMDS)
         {
-            std::cout << "  " << key << '\n';
+            printf("  %s\n", std::data(key));
         }
-        std::cout << "\nIn general, type CMD help to see command specific help.\n";
+        printf("\nIn general, type CMD help to see command specific help.\n");
     }
 }
 

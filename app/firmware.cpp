@@ -1,31 +1,95 @@
 #if 1
 #include "pico/stdlib.h"
 #include "pico/time.h"
+#include "pico/stdio.h"
+#include "pico/printf.h"
+
 #include "Command.hpp"
-#include <cstdio>
+#include "led_driver.hpp"
+#include "pico_chrono.hpp"
+#include "Ring_Buffer.hpp"
+#include "Input_State_Machine.hpp"
 
-int main()
+using namespace std::chrono_literals;
+
+namespace
 {
-    stdio_init_all();
-
-    static constexpr uint64_t TIMEOUT_US{1'000'000};
-    auto then{time_us_64()};
-    for (;;)
+    void print_forever(char character)
     {
-        const auto duration_passed{time_us_64() - then};
-        if (duration_passed > TIMEOUT_US)
+        for (;;)
         {
-            printf("Send any character to synchronize\n");
-            then = time_us_64() - (TIMEOUT_US - duration_passed);
+            printf("0x%02X\n", character);
+            pico::chrono::this_core_sleep(1s);
+        }
+    }
+    void loop_forever()
+    {
+        for (;;)
+        {
+            tight_loop_contents();
+        }
+    }
+    void blink_forever(std::chrono::milliseconds duration)
+    {
+
+        LED_Driver led_driver(PICO_DEFAULT_LED_PIN);
+        for (;;)
+        {
+            led_driver.put_pixel(0xFF >> 4);
+            pico::chrono::this_core_sleep(duration);
+            led_driver.put_pixel(0x00);
+            pico::chrono::this_core_sleep(duration);
         }
     }
 
-    help_fn({});
+    void wait_for_user_sync()
+    {
+        static constexpr auto TIMEOUT_US{1s};
+        const auto give_up_start{pico::chrono::sys_time_now()};
+        for (;;)
+        {
+            const auto start{pico::chrono::sys_time_now()};
+            printf("Send any character to synchronize\n");
+            int c{getchar_timeout_us(0)};
+            if (c != PICO_ERROR_TIMEOUT && c != '\0')
+            {
+                break;
+            }
+            const auto duration_passed{pico::chrono::sys_time_now() - start};
+            pico::chrono::this_core_sleep(TIMEOUT_US - duration_passed);
+        }
+    }
+}
 
+static constexpr auto WARNING_BLINK_DURATION{100ms};
+static constexpr auto INFO_BLINK_DURATION{2s};
+
+static constexpr auto MAX_LINE_LENGTH_PER_COMMAND_INVOCATION{40};
+static PicoLineProvider<MAX_LINE_LENGTH_PER_COMMAND_INVOCATION> line_provider;
+
+int main()
+{
+    if (!stdio_init_all())
+    {
+        blink_forever(WARNING_BLINK_DURATION);
+    }
+
+    wait_for_user_sync();
+
+    // the input state machine will read in characters from input and stuff them in the command queue when ready
+    // the command state machine processes any commnds in the queue
     for (;;)
     {
-        tight_loop_contents();
+        line_provider.update();
     }
+    printf("$> ");
+
+    help_fn({});
+    set_fn({});
+    pattern_fn({});
+    clock_fn({});
+
+    blink_forever(INFO_BLINK_DURATION);
 }
 
 #else // old way
@@ -119,7 +183,7 @@ int main()
     {
         pattern_driver.put_pattern(pattern_generator_2(index));
         const auto pixel_value{SINE_TABLE<SINE_TABLE_LENGTH>[index & SINE_TABLE_MASK(SINE_TABLE<SINE_TABLE_LENGTH>)]};
-        led_driver.put_pixel(SRGB_GAMMA_CURVE<SRGB_GAMMA_CURVE_LENGTH>[pixel_value] >> 4);
+        led_driver.put_pixel(srgb_gamma_curve<srgb_gamma_curve_length>[pixel_value] >> 4);
         index++;
         sleep_ms(5);
     }

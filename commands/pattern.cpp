@@ -1,9 +1,9 @@
 #include "app/Command.hpp"
 
-#include <iostream>
+#include "pico/printf.h"
 
 Command_Result pattern_fn([[maybe_unused]] const Command &args)
 {
-    std::cout << "Not implemented yet\n";
+    printf("Not implemented yet\n");
     return Command_Result::SUCCESS;
 }

@@ -51,6 +51,16 @@ public:
         return tmp;
     }
 
+    [[nodiscard]] std::array<T, MAX_SIZE> &array_ref() noexcept
+    {
+        return m_buf;
+    }
+
+    [[nodiscard]] const std::array<T, MAX_SIZE> &array_ref() const noexcept
+    {
+        return m_buf;
+    }
+
 private:
     static constexpr size_t INDEX_MASK{MAX_SIZE - 1};
     std::array<T, MAX_SIZE> m_buf;
