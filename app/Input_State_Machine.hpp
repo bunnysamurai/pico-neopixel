@@ -14,6 +14,7 @@
 #include "Ring_Buffer.hpp"
 #include "Command.hpp"
 #include "variable_array.hpp"
+#include "pico_panic.hpp"
 
 template <class LineProvider, class Logger>
 class SM
@@ -24,7 +25,7 @@ public:
 
     };
 
-    SM(LineProvider obj, Logger log) : m_read_line_fn{std::move(obj)}, m_logger{std::move(log)} {}
+    SM(LineProvider &obj, Logger &log) : m_read_line_fn{obj}, m_logger{log} {}
 
     void update()
     {
@@ -35,77 +36,52 @@ public:
         const auto new_line{get_next_line(m_read_line_fn)};
         const auto word{parse_word(new_line)};
 
-        if (!intialize_command(std::begin(word), std::end(word)))
+        // TODO was tired when writing this.  check it's okay
+        m_tmp.name.resize(std::size(word));
+        memcpy(&m_tmp.name, std::data(word), std::size(word));
+
+        if (!m_cmd_buffer.enqueue(m_tmp))
         {
-            print_error(m_logger, "word is not a valid command");
-            return;
+            print_error(m_logger, "PANIC Unable to enqueue the command!");
+            pico::panic::loop_forever();
         }
+    }
+
+    bool command_available() const noexcept
+    {
+        return !m_cmd_buffer.empty();
+    }
+
+    Command get_next_command() noexcept
+    {
+        return m_cmd_buffer.dequeue();
     }
 
 private:
-    LineProvider m_read_line_fn;
+    LineProvider &m_read_line_fn;
     Fixed_Log2_Ring_Buffer<Command, 4> m_cmd_buffer;
     Command m_tmp;
     std::array<char, 128> char_buffer;
-    Logger m_logger;
+    Logger &m_logger;
 
-    template <class Iter>
-    bool intialize_command(Iter start, Iter finish)
+    template <class T>
+    T parse_word(const T &arg)
     {
-        // we check each one character at a time across all possibilities
-        // we keep track of which commands are not a match, and skip any additionaly processing if it has already failed
-        // if this command possibility hasn't failed, it will fail if any are true:
-        //  1. the length of the input pattern and the length of the command are not the same
-        //  2. the charater in the input pattern does not match the letter in the command
-        const size_t word_dis{static_cast<size_t>(std::distance(start, finish))};
-
-        std::array<bool, std::size(BASECMDS)> failed{};
-
-        // check word size
-        for (size_t cmdidx{0}; cmdidx < std::size(BASECMDS); ++cmdidx)
-        {
-            const auto &command_possibility{BASECMDS[cmdidx]};
-            if (word_dis != std::size(command_possibility))
-            {
-                failed[cmdidx] = true;
-            }
-        }
-
-        // check string equality
-        static constexpr auto LONGEST_C0MMAND{[]
-                                              {
-                                                  return std::transform_reduce(std::begin(BASECMDS), std::end(BASECMDS), std::max, [](auto str)
-                                                                               { return std::size(str); });
-                                              }()};
-
-        for (size_t charidx{0}; charidx < LONGEST_C0MMAND; ++charidx)
-        {
-            for (size_t cmdidx{0}; cmdidx < std::size(BASECMDS); ++cmdidx)
-            {
-                if (failed[cmdidx])
-                {
-                    continue;
-                }
-                const auto &command_possibility{BASECMDS[cmdidx]};
-                if (*start != command_possibility[charidx])
-                {
-                    failed[cmdidx] = true;
-                    continue;
-                }
-            }
-        }
-
-        // if there are any successes, and there should only be one, grab it and set m_tmp
-        if (std::all_of(std::begin(failed), std::end(failed), [](auto val)
-                        { return val; }))
-        {
-            return false;
-        }
-        const auto idx_found{std::distance(std::begin(failed), std::find(std::begin(failed), std::end(failed), true))};
-        m_tmp.name = std::data(BASECMDS[idx_found]);
-        return true;
+        return arg;
     }
 };
+
+template <class LineProvider, class Logger>
+bool command_available(SM<LineProvider, Logger> &sm)
+{
+    return sm.command_available();
+}
+
+template <class LineProvider, class Logger>
+Command get_next_command(SM<LineProvider, Logger> &sm)
+{
+    return sm.get_next_command();
+}
 
 // an example line LineProvider
 // * a line reading state machine is pretty simple, if you read a /n then stuff the current buffer
@@ -126,8 +102,10 @@ public:
         {
             if (!m_line_buffer.enqueue(m_current_line))
             {
-                printf("hmm, couldn't enqueue?");
+                printf("PANIC hmm, couldn't enqueue?");
+                pico::panic::loop_forever();
             }
+            m_current_line.clear();
             return;
         }
         m_current_line.push_back(c);

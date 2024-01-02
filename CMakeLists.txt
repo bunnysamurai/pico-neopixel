@@ -23,6 +23,8 @@ pico_sdk_init()
 add_executable(${PROJECT_NAME} 
     app/firmware.cpp
     app/led_driver.cpp
+    app/pico_panic.cpp
+    app/pico_chrono.cpp
     commands/help.cpp
     commands/set.cpp
     commands/pattern.cpp

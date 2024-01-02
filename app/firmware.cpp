@@ -1,4 +1,6 @@
 #if 1
+#include <cstring>
+
 #include "pico/stdlib.h"
 #include "pico/time.h"
 #include "pico/stdio.h"
@@ -14,21 +16,6 @@ using namespace std::chrono_literals;
 
 namespace
 {
-    void print_forever(char character)
-    {
-        for (;;)
-        {
-            printf("0x%02X\n", character);
-            pico::chrono::this_core_sleep(1s);
-        }
-    }
-    void loop_forever()
-    {
-        for (;;)
-        {
-            tight_loop_contents();
-        }
-    }
     void blink_forever(std::chrono::milliseconds duration)
     {
 
@@ -59,13 +46,79 @@ namespace
             pico::chrono::this_core_sleep(TIMEOUT_US - duration_passed);
         }
     }
+
+}
+
+class PicoLogger
+{
+public:
+    template <class... Args>
+    void print(std::string_view str, Args &&...vals)
+    {
+        static constexpr auto MAX_LEN{80};
+        std::array<char, MAX_LEN + 1> null_term{};
+        if (std::size(str) > MAX_LEN)
+        {
+            printf("print_error_fail");
+        }
+        memcpy(std::data(null_term), std::data(str), std::size(str));
+        printf(std::data(null_term), std::forward<Args>(vals)...);
+    }
+    template <class... Args>
+    void print_error(std::string_view str, Args &&...vals)
+    {
+        static constexpr auto MAX_LEN{32};
+        std::array<char, MAX_LEN + 1 + 4> null_term{};
+        null_term[0] = '[';
+        null_term[1] = 'E';
+        null_term[2] = ']';
+        null_term[3] = ' ';
+        if (std::size(str) > MAX_LEN)
+        {
+            printf("print_error_fail");
+        }
+        memcpy(std::next(std::data(null_term), 4), std::data(str), std::size(str));
+        printf(std::data(null_term), std::forward<Args>(vals)...);
+    }
+
+private:
+};
+
+template <class... Args>
+void print(PicoLogger &dev, std::string_view str, Args &&...vals)
+{
+    dev.print(str, std::forward<Args>(vals)...);
+}
+
+template <class... Args>
+void print_error(PicoLogger &dev, std::string_view str, Args &&...vals)
+{
+    print(dev, "[!] ");
+    print(dev, str, std::forward<Args>(vals)...);
+}
+
+template <class... Args>
+void print_info(PicoLogger &dev, std::string_view str, Args &&...vals)
+{
+    print(dev, "[*] ");
+    print(dev, str, std::forward<Args>(vals)...);
+}
+
+template <class... Args>
+void print_debug(PicoLogger &dev, std::string_view str, Args &&...vals)
+{
+    print(dev, "[@] ");
+    print(dev, str, std::forward<Args>(vals)...);
 }
 
 static constexpr auto WARNING_BLINK_DURATION{100ms};
 static constexpr auto INFO_BLINK_DURATION{2s};
 
+static PicoLogger stdlogger;
 static constexpr auto MAX_LINE_LENGTH_PER_COMMAND_INVOCATION{40};
 static PicoLineProvider<MAX_LINE_LENGTH_PER_COMMAND_INVOCATION> line_provider;
+static SM command_state_machine{line_provider, stdlogger};
+static Command_SM command_runner{"[Meven5000]$ ", command_state_machine, stdlogger};
 
 int main()
 {
@@ -78,18 +131,13 @@ int main()
 
     // the input state machine will read in characters from input and stuff them in the command queue when ready
     // the command state machine processes any commnds in the queue
+    printf("[Meven5000]$ ");
     for (;;)
     {
         line_provider.update();
+        command_state_machine.update();
+        command_runner.update();
     }
-    printf("$> ");
-
-    help_fn({});
-    set_fn({});
-    pattern_fn({});
-    clock_fn({});
-
-    blink_forever(INFO_BLINK_DURATION);
 }
 
 #else // old way
