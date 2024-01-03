@@ -124,8 +124,8 @@ namespace pico_ws2812
 
         [[nodiscard]] static constexpr uint32_t wrgb_u32(WRGB pixel) noexcept
         {
-            return (static_cast<uint32_t>(pixel.red) << 24) |
-                   (static_cast<uint32_t>(pixel.green) << 16) |
+            return (static_cast<uint32_t>(pixel.green) << 24) |
+                   (static_cast<uint32_t>(pixel.red) << 16) |
                    (static_cast<uint32_t>(pixel.blue) << 8) |
                    static_cast<uint32_t>(pixel.white);
         }

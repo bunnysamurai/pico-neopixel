@@ -8,6 +8,7 @@
 
 #include <numeric>
 #include <algorithm>
+#include <utility>
 
 #include "pico/stdio.h"
 
@@ -17,68 +18,98 @@
 #include "pico_panic.hpp"
 
 template <class LineProvider, class Logger>
-class SM
+class CommandBuilder_SM
 {
 public:
-    enum struct State
-    {
+    constexpr CommandBuilder_SM(LineProvider &obj, Logger &log) noexcept : m_read_line_fn{obj}, m_logger{log} {}
 
-    };
-
-    SM(LineProvider &obj, Logger &log) : m_read_line_fn{obj}, m_logger{log} {}
-
-    void update()
+    constexpr void update() noexcept
     {
         if (!available(m_read_line_fn))
         {
             return;
         }
         const auto new_line{get_next_line(m_read_line_fn)};
-        const auto word{parse_word(new_line)};
+        auto search_itr{std::begin(new_line)};
 
-        // TODO was tired when writing this.  check it's okay
-        m_tmp.name.resize(std::size(word));
-        memcpy(&m_tmp.name, std::data(word), std::size(word));
+        const auto [word_start, word_finish]{parse_word(new_line, search_itr)};
+        add_name_to_command(word_start, word_finish);
 
-        if (!m_cmd_buffer.enqueue(m_tmp))
+        while (search_itr != std::end(new_line))
         {
-            print_error(m_logger, "PANIC Unable to enqueue the command!");
-            pico::panic::loop_forever();
+            const auto [word_start, word_finish]{parse_word(new_line, search_itr)};
+            add_arg_to_command(word_start, word_finish);
         }
+
+        enqueue_command();
     }
 
-    bool command_available() const noexcept
+    [[nodiscard]] constexpr bool command_available() const noexcept
     {
         return !m_cmd_buffer.empty();
     }
 
-    Command get_next_command() noexcept
+    [[nodiscard]] constexpr Command get_next_command() noexcept
     {
-        return m_cmd_buffer.dequeue();
+        const auto tmp{m_cmd_buffer.dequeue()};
+        return tmp;
     }
 
 private:
     LineProvider &m_read_line_fn;
     Fixed_Log2_Ring_Buffer<Command, 4> m_cmd_buffer;
     Command m_tmp;
-    std::array<char, 128> char_buffer;
     Logger &m_logger;
 
-    template <class T>
-    T parse_word(const T &arg)
+    [[nodiscard]] static constexpr auto parse_word(const auto &line, auto &search_itr) noexcept
     {
-        return arg;
+        constexpr char SPACE{' '};
+        const auto search_begin{search_itr};
+        search_itr = std::find(search_itr, std::end(line), SPACE);
+        const auto search_end{search_itr};
+        while (search_itr != std::end(line) && *search_itr == SPACE)
+        {
+            ++search_itr;
+        }
+        return std::make_pair(search_begin, search_end);
+    }
+
+    constexpr void enqueue_command() noexcept
+    {
+        if (!m_cmd_buffer.enqueue(m_tmp))
+        {
+            print_error(m_logger, "PANIC Unable to enqueue the command!");
+            pico::panic::loop_forever();
+        }
+        m_tmp.arguments.clear();
+        m_tmp.name.clear();
+    }
+
+    constexpr void add_name_to_command(const auto word_start, const auto word_finish) noexcept
+    {
+        const auto ssize{std::distance(word_start, word_finish)};
+        m_tmp.name.resize(ssize);
+        memcpy(std::data(m_tmp.name), word_start, ssize);
+    }
+
+    constexpr void add_arg_to_command(const auto word_start, const auto word_finish) noexcept
+    {
+        const auto ssize{std::distance(word_start, word_finish)};
+        std::decay_t<decltype(m_tmp.arguments[0])> tmp;
+        tmp.resize(ssize);
+        memcpy(std::data(tmp), word_start, ssize);
+        m_tmp.arguments.push_back(tmp);
     }
 };
 
 template <class LineProvider, class Logger>
-bool command_available(SM<LineProvider, Logger> &sm)
+bool command_available(CommandBuilder_SM<LineProvider, Logger> &sm)
 {
     return sm.command_available();
 }
 
 template <class LineProvider, class Logger>
-Command get_next_command(SM<LineProvider, Logger> &sm)
+Command get_next_command(CommandBuilder_SM<LineProvider, Logger> &sm)
 {
     return sm.get_next_command();
 }
@@ -98,6 +129,7 @@ public:
         {
             return;
         }
+        printf("%c", c); // TODO we also echo here?  need to support backspace and delete
         if (c == '\n')
         {
             if (!m_line_buffer.enqueue(m_current_line))
@@ -117,7 +149,8 @@ public:
     }
     [[nodiscard]] line_type get_next_line() noexcept
     {
-        return m_line_buffer.dequeue();
+        const auto tmp{m_line_buffer.dequeue()};
+        return tmp;
     }
 
 private:

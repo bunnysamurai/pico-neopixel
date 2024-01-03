@@ -12,19 +12,21 @@
 enum struct Command_Result
 {
     SUCCESS,
-    COMMAND_NOT_FOUND
+    COMMAND_NOT_FOUND,
+    ARG_INVALID
 };
 
 template <size_t ARG_LENGTH, size_t ARG_MAX_COUNT>
 struct Command_T
 {
 public:
-    using arg_type = std::array<char, ARG_LENGTH>;
+    // using arg_type = std::array<char, ARG_LENGTH>;
+    using arg_type = embp::variable_array<char, ARG_LENGTH>;
     embp::variable_array<char, ARG_LENGTH> name;
-    std::array<arg_type, ARG_MAX_COUNT> arguments;
+    embp::variable_array<arg_type, ARG_MAX_COUNT> arguments;
 };
 
-using Command = Command_T<8, 5>;
+using Command = Command_T<16, 16>;
 using Command_Handler = Command_Result (*)(const Command &);
 
 extern Command_Result help_fn(const Command &);
@@ -133,38 +135,29 @@ constexpr void print_error(Console &logger, Command_Result status) noexcept
     {
     case Command_Result::SUCCESS:
         return;
+    case Command_Result::ARG_INVALID:
+        print_error(logger, "Invalid Argument(s).\n");
+        return;
     case Command_Result::COMMAND_NOT_FOUND:
-        print_error(logger, "Command not found.");
+        print_error(logger, "Command not found.\n");
         return;
     }
 }
 
 template <class CommandProvider, class Console>
-class Command_SM
+class CommandExecutor_SM
 {
 public:
-    Command_SM(const char *console_str, CommandProvider &obj, Console &log) : m_commander{obj}, m_log{log}, m_console{console_str} {}
+    CommandExecutor_SM(const char *console_str, CommandProvider &obj, Console &log) : m_commander{obj}, m_log{log}, m_console{console_str} {}
 
     constexpr void update() const
     {
-        auto &&print_line{
-            [&](const auto &line)
-            {
-                for (const auto c : line)
-                {
-                    print(m_log, "%c", c);
-                }
-                print(m_log, "\n");
-            }};
-
         if (!command_available(m_commander))
         {
             return;
         }
 
         const Command next_cmd{get_next_command(m_commander)};
-
-        print_line(next_cmd.name);
 
         if (!check_command_is_valid(next_cmd))
         {
